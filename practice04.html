@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Spotify Genres</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: #fff;
+        }
+
+        header {
+            background-color: #1db954;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+        }
+
+        #logo {
+            width: 60px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        h1 {
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #genres {
+            list-style: none;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .genre-item {
+            width: 160px;
+            margin: 20px;
+            text-align: center;
+            background-color: #333;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            overflow: hidden;
+        }
+
+        .genre-item:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .genre-image {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 10px;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
+            margin: 0 auto;
+            transition: transform 0.3s ease;
+        }
+
+        .genre-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .playlist-container {
+            list-style: none;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            background-color: #1db954;
+        }
+
+        .playlist-container li h3 {
+            font-size: 16px;
+            margin: 0;
+        }
+
+        @media (max-width: 768px) {
+            .genre-item {
+                width: calc(50% - 40px);
+                margin: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg" alt="Spotify Logo">
+        <h1>Spotify Genres</h1>
+
+        <div id="search-container">
+            <input type="text" id="search-input" placeholder="Search genres...">
+            <button id="search-button">Search</button>
+            <button id="reset-button">Reset</button> <!-- Add Reset button -->
+        </div>
+
+    </header>
+
+    <input type="checkbox" id="show-playlist-checkbox">
+    <label for="show-playlist-checkbox">Show Playlist</label>
+
+    <ul id="genres">
+        <!-- Genres will be dynamically added here -->
+    </ul>
+
+        <script>
+            const clientID = 'ae10d6b1adeb4d438eb0095bb64b55e1';
+            const clientSecret = '2ba82ef2590449d3b2c63c61ac165c98';
+            let accessToken;
+        
+            const getToken = async () => {
+                const result = await fetch("https://accounts.spotify.com/api/token", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        Authorization: "Basic " + btoa(`${clientID}:${clientSecret}`),
+                    },
+                    body: "grant_type=client_credentials",
+                });
+        
+                const data = await result.json();
+                console.log("data is here",data)
+                accessToken = data.access_token;
+                return accessToken;
+            };
+        
+            const displayGenres = async () => {
+                const token = await getToken();
+        
+                const result = await fetch('https://api.spotify.com/v1/recommendations/available-genre-seeds', {
+                    method: "GET",
+                    headers: {
+                        Authorization: "Bearer " + token,
+                    }
+                });
+        
+                const data = await result.json();
+                console.log("genres data is here",data)
+                const genresList = document.getElementById('genres');
+        
+                data.genres.forEach(async (genre) => {
+                    const genreItem = document.createElement('li');
+                    genreItem.classList.add('genre-item');
+        
+                    const genreImage = document.createElement('img');
+                    genreImage.classList.add('genre-image');
+        
+                    const genreDetails = await fetch(`https://api.spotify.com/v1/browse/categories/${genre}`, {
+                        method: "GET",
+                        headers: {
+                            Authorization: "Bearer " + token,
+                        }
+                    });
+        
+                    const genreData = await genreDetails.json();
+                    if (genreData.icons.length > 0) {
+                        genreImage.src = genreData.icons[0].url;
+                    } else {
+                        genreImage.src = 'https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg';
+                    }
+        
+                    genreImage.alt = genre;
+                    genreItem.appendChild(genreImage);
+        
+                    const genreName = document.createElement('p');
+                    genreName.textContent = genre;
+                    genreName.classList.add('genre-name');
+                    genreItem.appendChild(genreName);
+        
+                    genresList.appendChild(genreItem);
+        
+                    // Lazy load images when they come into view
+                    const lazyLoad = () => {
+                        if (genreImage.dataset.src) {
+                            genreImage.src = genreImage.dataset.src;
+                        }
+                    };
+        
+                    const io = new IntersectionObserver((entries, observer) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                lazyLoad();
+                                observer.unobserve(genreItem);
+                            }
+                        });
+                    });
+        
+                    io.observe(genreItem);
+                });
+            };
+        
+            const displayPlaylists = async (genre) => {
+                const token = await getToken();
+                const playlistResult = await fetch(`https://api.spotify.com/v1/browse/categories/${genre}/playlists`, {
+                    method: "GET",
+                    headers: {
+                        Authorization: "Bearer " + token,
+                    }
+                });
+        
+                if (!playlistResult.ok) {
+                    return []; // Return empty array if playlists are not available
+                }
+        
+                const playlistData = await playlistResult.json();
+                return playlistData.playlists.items;
+            };
+            
+            const handleCheckboxChange = async () => {
+                const checkbox = document.getElementById('show-playlist-checkbox');
+                const genresList = document.getElementById('genres');
+        
+                checkbox.addEventListener('change', async () => {
+                    const searchInput = document.getElementById('search-input').value.toLowerCase();
+                    const genres = document.querySelectorAll('.genre-item');
+        
+                    if (checkbox.checked) {
+                        for (let i = 0; i < genres.length; i++) {
+                            const genreName = genres[i].querySelector('.genre-name').textContent.toLowerCase();
+                            const genreItem = genres[i]; // Get the genre item <li> element
+        
+                            if (genreName.includes(searchInput)) {
+                                genreItem.style.display = 'block'; // Show genre if it matches search input
+                                const playlists = await displayPlaylists(genreName);
+        
+                                if (playlists.length > 0) {
+                                    const playlistContainer = document.createElement('ul');
+                                    playlistContainer.classList.add('playlist-container');
+        
+                                    playlists.forEach((playlist) => {
+                                        const playlistItem = document.createElement('li');
+                                        const playlistTitle = document.createElement('h3');
+                                        playlistTitle.textContent = playlist.name;
+                                        playlistItem.appendChild(playlistTitle);
+        
+                                        playlistContainer.appendChild(playlistItem);
+                                    });
+        
+                                    genreItem.appendChild(playlistContainer);
+                                }
+                            } else {
+                                genreItem.style.display = 'none'; // Hide genre if it does not match search input
+                            }
+                        }
+                    } else {
+                        genres.forEach(genre => {
+                            genre.style.display = 'block'; // Show all genres if checkbox is unchecked
+                            const playlistContainer = genre.querySelector('.playlist-container');
+                            if (playlistContainer) {
+                                playlistContainer.remove(); // Remove playlist container if it exists
+                            }
+                        });
+                    }
+                });
+            };
+        //#3
+            const filterGenres = () => {
+                const searchInput = document.getElementById('search-input').value.toLowerCase();
+                const genres = document.querySelectorAll('.genre-item');
+        
+                genres.forEach(genre => {
+                    const genreName = genre.querySelector('.genre-name').textContent.toLowerCase();
+                    const genreItem = genre; // Get the genre item <li> element
+        
+                    if (genreName.includes(searchInput)) {
+                        genreItem.style.display = 'block'; // Show genre if it matches search input
+                    } else {
+                        genreItem.style.display = 'none'; // Hide genre if it does not match search input
+                    }
+                });
+            };
+        // Function to reset filters and show all genres #4
+    const resetFilters = () => {
+    const genres = document.querySelectorAll('.genre-item');
+    genres.forEach(genre => {
+        genre.style.display = 'block'; // Show all genres
+    });
+    document.getElementById('search-input').value = ''; // Clear search input
+};
+
+            document.getElementById('search-button').addEventListener('click', filterGenres);
+        
+            // Optional: Enable live filtering while typing in the search input
+            document.getElementById('search-input').addEventListener('input', filterGenres);
+            document.getElementById('reset-button').addEventListener('click', resetFilters);
+
+            displayGenres();
+            handleCheckboxChange();
+
+            //#2
+        
+    </script>
+</body>
+</html>
